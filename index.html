@@ -161,7 +161,7 @@
 const CONFIG = {
   scrapeEndpoint: "/scrape",          // the Cloudflare Pages Function
   stripeLink: "",                     // <-- paste your £2 Stripe Payment Link here
-  renderEndpoint: "",                 // <-- later: an image-API function for real renders
+  renderEndpoint: "/render",          // image-API function (inert until OPENAI_API_KEY is set in Cloudflare)
   currencyHint: "€",
 };
 /* =================================================== */
@@ -245,10 +245,10 @@ function render(d){
     fl.innerHTML = `<b>No obvious legal red flags in the listing text</b> — still worth a lawyer's check before any offer.`;
   }
 
-  // renders (placeholders until an image API is wired)
-  const slots = [["Exterior","restored stone & garden"],["Kitchen","warm Mediterranean"],["Living","open-plan, light"]];
+  // renders — placeholders until OPENAI_API_KEY is set; then filled live on unlock
+  const slots = [["exterior","restored stone & garden"],["kitchen","warm Mediterranean"],["living","open-plan, light"]];
   $("r-renders").innerHTML = slots.map(s =>
-    `<figure><div class="slot"><div class="k">Concept</div><div class="l">${s[1]}</div></div></figure>`
+    `<figure data-label="${s[1]}" data-prompt="${encodeURIComponent(promptFor(s[0], d))}">${slotPlaceholder(s[1])}</figure>`
   ).join("");
 
   // rough cost guide (indicative, from built area)
@@ -267,7 +267,42 @@ function render(d){
 
 function unlock(){
   $("veil").style.display = "none";
-  // a real render call would go here when CONFIG.renderEndpoint is set
+  renderSlots();
+}
+
+function slotPlaceholder(label){
+  return `<div class="slot"><div class="k">Concept</div><div class="l">${label}</div></div>`;
+}
+
+function promptFor(kind, d){
+  const place = d.location ? (" in " + d.location) : " in rural Mallorca";
+  if(kind === "kitchen")
+    return "Photorealistic warm contemporary Mediterranean kitchen inside a compact restored Mallorcan stone finca: light oak cabinetry, limestone surfaces, retained stone wall, lime plaster, black-framed openings, modest scale, natural light.";
+  if(kind === "living")
+    return "Photorealistic compact open-plan living area inside a restored Mallorcan stone finca: linen upholstery, natural rug, retained stone wall, lime plaster, oak joinery, strong connection to a terrace and garden, calm and understated.";
+  // exterior — keep the building honest: modest scale, no oversized villa
+  return "Photorealistic architectural concept. Restored modest single-storey Mallorcan stone finca" + place +
+    ", retaining the original stone character and roofline — not an oversized villa. Lime render, oak joinery, " +
+    "dark-framed glazing, olive trees, lavender, gravel arrival, warm Mediterranean light, restrained and tasteful.";
+}
+
+async function renderSlots(){
+  if(!CONFIG.renderEndpoint) return;
+  const figs = document.querySelectorAll('#r-renders figure');
+  for(const fig of figs){
+    const prompt = decodeURIComponent(fig.getAttribute('data-prompt') || '');
+    const label = fig.getAttribute('data-label') || '';
+    if(!prompt) continue;
+    fig.innerHTML = '<div class="slot"><div class="k">Generating…</div></div>';
+    try{
+      const r = await fetch(CONFIG.renderEndpoint, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt })
+      });
+      const j = await r.json();
+      if(j.ok && j.image){ fig.innerHTML = `<img src="${j.image}" alt="concept render">`; }
+      else { fig.innerHTML = slotPlaceholder(label); }   // no key / error → keep placeholder
+    }catch(e){ fig.innerHTML = slotPlaceholder(label); }
+  }
 }
 
 /* events */
