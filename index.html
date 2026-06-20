@@ -9,12 +9,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=EB+Garamond:ital@0;1&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   /* =========================================================
-     "See the Dream" — paste a listing, see what it could become.
+     "See the Dream" — add listing photos + a few facts, see what
+     it could become. No scraping: the user supplies the photos.
+     The exterior render transforms the FIRST photo (image-to-image);
+     the interior slots are concept renders.
      CONFIG is at the bottom of the <script>. To go live:
-       1. Deploy this file + /functions/scrape.js to Cloudflare Pages.
-       2. Create a £2 Stripe Payment Link, paste it into CONFIG.stripeLink.
-       3. (Later) wire CONFIG.renderEndpoint to an image API for real renders.
-     Rename freely — "See the Dream" is a placeholder.
+       1. Deploy this + /functions/render.js to Cloudflare Pages.
+       2. Set OPENAI_API_KEY (Secret), IMAGE_MODEL, IMAGE_QUALITY in
+          the Pages env variables.
+       3. Create a £2 Stripe Payment Link -> CONFIG.stripeLink.
      ========================================================= */
   :root{
     --paper:#FBF9F4; --paper-2:#F4EFE6; --card:#fff;
@@ -28,29 +31,38 @@
   .wrap{max-width:980px;margin:0 auto;padding:0 22px}
   h1,h2,h3{font-family:"Playfair Display",Georgia,serif;font-weight:500;line-height:1.12;margin:0}
   .eyebrow{font-family:"Jost",sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:.22em;font-size:11.5px;color:var(--clay)}
-  .meta{font-family:"Jost",sans-serif;letter-spacing:.04em}
   .muted{color:var(--ink-soft)}
   a{color:var(--clay-deep)}
 
   /* hero / capture */
-  .hero{padding:74px 0 30px;text-align:center}
+  .hero{padding:64px 0 18px;text-align:center}
   .hero h1{font-size:clamp(36px,7vw,64px);letter-spacing:-.01em}
   .hero h1 em{font-style:italic;color:var(--clay-deep)}
   .hero p.lede{font-size:clamp(18px,2.6vw,22px);color:var(--ink-soft);max-width:30ch;margin:18px auto 0}
-  .capture{margin:34px auto 0;max-width:620px;display:flex;gap:10px}
-  .capture input{flex:1;font-family:"Jost",sans-serif;font-size:15px;padding:15px 18px;border:1px solid var(--rule);border-radius:100px;background:#fff;color:var(--ink)}
-  .capture input:focus{outline:none;border-color:var(--clay)}
-  .btn{font-family:"Jost",sans-serif;font-weight:500;letter-spacing:.03em;font-size:15px;border:none;border-radius:100px;padding:15px 26px;background:var(--ink);color:#F4EFE6;cursor:pointer;white-space:nowrap;transition:transform .15s ease,background .15s ease}
+
+  .capture-card{max-width:640px;margin:30px auto 0;background:var(--card);border:1px solid var(--rule);border-radius:16px;box-shadow:var(--shadow);padding:24px}
+  .dropzone{border:1.5px dashed #D8CDB8;border-radius:12px;background:var(--paper-2);padding:28px 18px;text-align:center;cursor:pointer;transition:border-color .15s ease,background .15s ease}
+  .dropzone.drag{border-color:var(--clay);background:#F3EAD9}
+  .dz-inner{font-family:"Playfair Display",serif;font-size:21px;color:var(--ink)}
+  .dz-sub{font-family:"Jost",sans-serif;font-size:12.5px;letter-spacing:.04em;color:var(--faint);margin-top:6px}
+  .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .thumbs .t{position:relative;width:74px;height:60px;border-radius:8px;overflow:hidden;background:var(--paper-2)}
+  .thumbs .t img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumbs .t .x{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:rgba(44,40,35,.78);color:#fff;font-family:"Jost",sans-serif;font-size:12px;line-height:18px;text-align:center;cursor:pointer}
+  .thumbs .t.lead::after{content:"BEFORE";position:absolute;bottom:0;left:0;right:0;font-family:"Jost",sans-serif;font-size:8px;letter-spacing:.12em;text-align:center;background:rgba(44,40,35,.62);color:#fff;padding:1px}
+
+  .form{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+  .form input{font-family:"Jost",sans-serif;font-size:14px;padding:12px 14px;border:1px solid var(--rule);border-radius:10px;background:#fff;color:var(--ink);width:100%}
+  .form input:focus{outline:none;border-color:var(--clay)}
+  .form input.wide{grid-column:1 / -1}
+  .form textarea{grid-column:1 / -1;font-family:"EB Garamond",serif;font-size:15px;line-height:1.5;padding:12px 14px;border:1px solid var(--rule);border-radius:10px;background:#fff;color:var(--ink);width:100%;resize:vertical}
+  .form textarea:focus{outline:none;border-color:var(--clay)}
+  .desc{margin:16px 0 0;color:var(--ink-soft);font-size:16px;line-height:1.55;white-space:pre-line}
+  .btn{font-family:"Jost",sans-serif;font-weight:500;letter-spacing:.03em;font-size:15px;border:none;border-radius:100px;padding:14px 26px;background:var(--ink);color:#F4EFE6;cursor:pointer;transition:transform .15s ease,background .15s ease}
   .btn:hover{transform:translateY(-1px)}
   .btn.gold{background:var(--clay-deep)}
-  .howto{margin:18px auto 0;font-family:"Jost",sans-serif;font-size:12.5px;letter-spacing:.04em;color:var(--faint)}
-  .howto b{color:var(--ink-soft);font-weight:500}
-
-  /* states */
-  #status{min-height:24px;text-align:center;margin-top:18px;font-family:"Jost",sans-serif;font-size:13px;letter-spacing:.04em;color:var(--ink-soft)}
-  .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--rule);border-top-color:var(--clay);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:8px}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .demo-badge{display:inline-block;font-family:"Jost",sans-serif;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);border:1px solid #E6D2A8;background:#FAF3E3;border-radius:100px;padding:5px 12px}
+  .btn.block{display:block;width:100%;margin-top:16px}
+  #status{min-height:22px;text-align:center;margin-top:14px;font-family:"Jost",sans-serif;font-size:13px;letter-spacing:.04em;color:var(--ink-soft)}
 
   /* result */
   #result{display:none;padding:8px 0 70px}
@@ -63,16 +75,12 @@
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
   .chip{font-family:"Jost",sans-serif;font-size:12px;letter-spacing:.03em;color:var(--ink-soft);background:var(--paper-2);border-radius:100px;padding:7px 13px}
   .chip b{color:var(--ink);font-weight:500}
-
-  .gallery{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-top:4px}
+  .gallery{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px}
   .gallery figure{margin:0;min-height:150px;background:var(--paper-2);position:relative;overflow:hidden}
   .gallery figure:first-child{grid-row:span 2;min-height:308px}
   .gallery img{width:100%;height:100%;object-fit:cover;display:block}
   .gallery .tag{position:absolute;top:10px;left:10px;font-family:"Jost",sans-serif;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#fff;background:rgba(44,40,35,.7);padding:4px 9px;border-radius:4px}
-
-  .flags{margin-top:2px;padding:14px 28px;background:#FAEFE9;border-top:1px solid #EFD9CF;font-family:"Jost",sans-serif;font-size:12.5px;letter-spacing:.02em;color:var(--clay-deep)}
-  .flags b{font-weight:500}
-  .flags.clean{background:#F1F5EB;border-top-color:#D9E3CC;color:var(--olive-deep)}
+  .reminder{padding:13px 28px;background:#F4EFE6;border-top:1px solid var(--rule);font-family:"Jost",sans-serif;font-size:12.5px;letter-spacing:.02em;color:var(--ink-soft)}
 
   /* locked vision */
   .vision{position:relative}
@@ -81,14 +89,12 @@
   .vision .veil p{color:var(--ink-soft);max-width:34ch;margin:10px 0 20px}
   .vision .veil .price-tag{font-family:"Jost",sans-serif;font-size:12px;letter-spacing:.08em;color:var(--faint);margin-top:14px}
   .vision .veil .dev{display:block;margin-top:12px;font-family:"Jost",sans-serif;font-size:11.5px;color:var(--faint);cursor:pointer;text-decoration:underline}
-
   .renders{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   .renders figure{margin:0;min-height:180px;background:linear-gradient(135deg,#EFE9DC,#E5DCCA);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
   .renders figure img{width:100%;height:100%;object-fit:cover}
   .renders .slot{font-family:"Jost",sans-serif;text-align:center;color:var(--ink-soft);padding:14px}
   .renders .slot .k{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--clay)}
   .renders .slot .l{font-style:italic;font-size:14px;margin-top:6px}
-
   .cost{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;margin-top:22px;padding:20px 24px;background:var(--ink);color:#F2ECE0;border-radius:12px}
   .cost .lab{font-family:"Jost",sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
   .cost .band{font-family:"Playfair Display",serif;font-size:clamp(22px,3vw,28px);margin-top:4px}
@@ -98,7 +104,6 @@
   .disc{max-width:70ch;margin:0 auto}
 
   @media(max-width:760px){
-    .capture{flex-direction:column}
     .gallery{grid-template-columns:1fr 1fr}.gallery figure:first-child{grid-column:span 2;grid-row:auto;min-height:200px}
     .renders{grid-template-columns:1fr}
   }
@@ -109,40 +114,49 @@
 <section class="hero wrap">
   <div class="eyebrow">Spanish renovation properties</div>
   <h1>See the <em>dream</em>.</h1>
-  <p class="lede">Paste a property listing. See what it could become — in about a minute, for £2.</p>
-  <div class="capture">
-    <input id="url" type="url" placeholder="Paste a terrenos.es listing link…" autocomplete="off">
-    <button class="btn" id="go">See the dream →</button>
+  <p class="lede">Add the listing photos, see what it could become — for £2.</p>
+
+  <div class="capture-card">
+    <div class="dropzone" id="drop">
+      <input type="file" id="files" accept="image/*" multiple hidden>
+      <div class="dz-inner">＋ Add the listing photos</div>
+      <div class="dz-sub">the current “before” shots — drag in or tap. The first one becomes the hero.</div>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="form">
+      <input id="f-loc" class="wide" placeholder="Location  (e.g. Algaida, Mallorca)">
+      <input id="f-price" type="number" placeholder="Asking price (€)">
+      <input id="f-build" type="number" placeholder="Built area (m²)">
+      <input id="f-plot" type="number" placeholder="Plot (m²) — optional">
+      <input id="f-type" placeholder="Type — optional (e.g. Finca)">
+      <textarea id="f-details" class="wide" rows="4" placeholder="Paste the listing details / description here — used to tailor the renders and to flag anything worth checking"></textarea>
+    </div>
+    <button class="btn block" id="go">See the dream →</button>
+    <div id="status"></div>
   </div>
-  <div class="howto">Works today on <b>terrenos.es</b> links · before-photos &amp; facts pulled live from the listing</div>
-  <div id="status"></div>
 </section>
 
 <section class="wrap" id="result">
-  <!-- property panel -->
   <div class="panel">
     <div class="pad">
       <div class="prop-top">
-        <div>
-          <h2 id="r-title"></h2>
-          <div class="loc" id="r-loc"></div>
-        </div>
+        <div><h2 id="r-title"></h2><div class="loc" id="r-loc"></div></div>
         <div class="price" id="r-price"></div>
       </div>
       <div class="chips" id="r-chips"></div>
+      <p class="desc" id="r-desc"></p>
     </div>
     <div class="gallery" id="r-gallery"></div>
-    <div class="flags" id="r-flags"></div>
+    <div class="reminder" id="r-reminder">A dream is not a survey. Always confirm a property’s legal and planning status with a local professional before you fall in love.</div>
   </div>
 
-  <!-- vision panel (locked until £2) -->
   <div class="panel vision" id="vision">
     <div class="veil" id="veil">
       <div class="eyebrow">The vision</div>
-      <h3>See it restored — exterior, kitchen, living &amp; garden</h3>
-      <p>Concept renders, a quick renovation cost guide and the full brochure to keep.</p>
+      <h3>See your property restored — exterior, kitchen &amp; living</h3>
+      <p>Concept renders built from your photos, plus a quick renovation cost guide.</p>
       <button class="btn gold" id="unlock">Unlock the full vision · £2</button>
-      <span class="price-tag">one property · instant · yours to download</span>
+      <span class="price-tag">one property · instant · yours to keep</span>
       <span class="dev" id="dev">preview without paying (you)</span>
     </div>
     <div class="pad">
@@ -153,171 +167,174 @@
 </section>
 
 <footer class="wrap">
-  <div class="disc" id="disc">Concept visuals and rough figures only — not a valuation, survey, planning opinion or legal advice. Always verify a property's legal and planning status with a qualified local professional before committing.</div>
+  <div class="disc" id="disc">Concept visuals and rough figures only — not a valuation, survey, planning opinion or legal advice. Always verify a property’s legal and planning status with a qualified local professional before committing.</div>
 </footer>
 
 <script>
 /* ====================== CONFIG ====================== */
 const CONFIG = {
-  scrapeEndpoint: "/scrape",          // the Cloudflare Pages Function
-  stripeLink: "",                     // <-- paste your £2 Stripe Payment Link here
-  renderEndpoint: "/render",          // image-API function (inert until OPENAI_API_KEY is set in Cloudflare)
-  currencyHint: "€",
+  renderEndpoint: "/render",   // image-API function (inert until OPENAI_API_KEY set in Cloudflare)
+  stripeLink: "",              // <-- paste your £2 Stripe Payment Link here
 };
 /* =================================================== */
 
 const $ = (id) => document.getElementById(id);
+let PHOTOS = [];      // array of data URLs (display)
 let CURRENT = null;
 
-// Sample data so the page renders in preview before the backend is deployed.
-const DEMO = {
-  ok:true, demo:true, ref:"TR412081", title:"Detached house · Algaida", location:"Algaida, Mallorca",
-  price:149900, plotArea:5000, buildArea:60, bathrooms:1, type:"Detached house",
-  landType:"Non-developable", access:"Paved road", utilities:["Water","Electricity","Sewerage","Solar","Well"],
-  hero:"https://cdn.terrenos.es/photo/0144/01/9c7fc7184f245d3bc5fec67381a506efba3767bb.jpg",
-  photos:[
-    "https://cdn.terrenos.es/photo/0144/01/thumb_14300390_photo_standart.jpg",
-    "https://cdn.terrenos.es/photo/0144/01/thumb_14300391_photo_standart.jpg"
-  ],
-  flags:{nonDevelopable:true,noCedula:true,unregistered:true,pre1984:true}
-};
-
-function eur(n){ return n ? "€" + n.toLocaleString("en-GB") : "—"; }
-
-async function run(url){
-  setStatus(true, "Reading the listing…");
-  let data;
-  try{
-    const r = await fetch(CONFIG.scrapeEndpoint + "?url=" + encodeURIComponent(url));
-    data = await r.json();
-    if(!data.ok) throw new Error(data.error || "parse failed");
-  }catch(e){
-    // backend not reachable (e.g. previewing before deploy) -> fall back to sample
-    data = Object.assign({}, DEMO, { sourceUrl:url });
-  }
-  CURRENT = data;
-  render(data);
-  setStatus(false, data.demo ? "demo" : "");
+/* ---------- file intake ---------- */
+function readFile(file){
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
 }
-
-function setStatus(loading, msg){
-  const s = $("status");
-  if(loading){ s.innerHTML = '<span class="spinner"></span>' + msg; return; }
-  s.innerHTML = msg === "demo"
-    ? '<span class="demo-badge">Preview — sample data (deploy the scrape function for live listings)</span>'
-    : "";
+async function addFiles(list){
+  for(const f of list){ if(!f.type || !f.type.startsWith("image/")) continue; PHOTOS.push(await readFile(f)); }
+  renderThumbs();
 }
+function renderThumbs(){
+  $("thumbs").innerHTML = PHOTOS.map((u,i) =>
+    `<div class="t${i===0?' lead':''}"><img src="${u}" alt=""><div class="x" data-i="${i}">×</div></div>`
+  ).join("");
+  $("thumbs").querySelectorAll(".x").forEach(b => b.addEventListener("click", e => {
+    PHOTOS.splice(+e.target.dataset.i, 1); renderThumbs();
+  }));
+}
+$("drop").addEventListener("click", () => $("files").click());
+$("files").addEventListener("change", e => addFiles(e.target.files));
+["dragover","dragenter"].forEach(ev => $("drop").addEventListener(ev, e => { e.preventDefault(); $("drop").classList.add("drag"); }));
+["dragleave","drop"].forEach(ev => $("drop").addEventListener(ev, e => { e.preventDefault(); $("drop").classList.remove("drag"); }));
+$("drop").addEventListener("drop", e => { if(e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files); });
+
+/* ---------- build + render ---------- */
+function eur(n){ return n ? "€" + Number(n).toLocaleString("en-GB") : ""; }
+
+$("go").addEventListener("click", () => {
+  if(PHOTOS.length === 0){ $("status").textContent = "Add at least one photo of the property."; return; }
+  const d = {
+    location: $("f-loc").value.trim(),
+    price: parseInt(($("f-price").value || "").replace(/[^\d]/g,""), 10) || null,
+    buildArea: parseInt(($("f-build").value || "").replace(/[^\d]/g,""), 10) || null,
+    plotArea: parseInt(($("f-plot").value || "").replace(/[^\d]/g,""), 10) || null,
+    type: $("f-type").value.trim() || "Finca",
+    details: $("f-details").value.trim(),
+    photos: PHOTOS.slice(),
+    hero: PHOTOS[0],
+  };
+  CURRENT = d;
+  $("status").textContent = "";
+  render(d);
+});
 
 function render(d){
-  $("r-title").textContent = d.title || "Property";
-  $("r-loc").textContent = [d.location, d.ref].filter(Boolean).join("  ·  ");
+  $("r-title").textContent = d.type + (d.location ? " · " + d.location.split(",")[0] : "");
+  $("r-loc").textContent = d.location || "";
   $("r-price").textContent = eur(d.price);
 
-  // chips
   const chips = [];
   if(d.buildArea) chips.push(["Built", d.buildArea + " m²"]);
   if(d.plotArea) chips.push(["Plot", d.plotArea.toLocaleString("en-GB") + " m²"]);
   if(d.type) chips.push(["Type", d.type]);
-  if(d.bathrooms) chips.push(["Baths", d.bathrooms]);
-  if(d.access) chips.push(["Access", d.access]);
-  if(d.utilities && d.utilities.length) chips.push(["Services", d.utilities.join(" · ")]);
   $("r-chips").innerHTML = chips.map(c => `<span class="chip"><b>${c[0]}</b> ${c[1]}</span>`).join("");
+  $("r-desc").textContent = d.details || "";
+  applyFlags(d.details);
 
-  // gallery
-  const imgs = [d.hero, ...(d.photos||[])].filter(Boolean).slice(0,5);
-  $("r-gallery").innerHTML = imgs.map((u,i) =>
-    `<figure>${i===0?'<span class="tag">Before</span>':''}<img src="${u}" alt="" loading="lazy" onerror="this.parentNode.style.display='none'"></figure>`
-  ).join("") || "";
-
-  // honest auto-flags
-  const f = d.flags || {};
-  const notes = [];
-  if(f.nonDevelopable) notes.push("non-developable land");
-  if(f.noCedula) notes.push("no cédula (habitation licence) mentioned");
-  if(f.unregistered) notes.push("building not registered");
-  if(f.pre1984) notes.push("seller claims pre-1984");
-  const fl = $("r-flags");
-  if(notes.length){
-    fl.className = "flags";
-    fl.innerHTML = `<b>Worth checking before you fall in love:</b> ${notes.join(" · ")}. These affect whether it can legally be lived in, extended or sold — confirm with a local lawyer.`;
-  } else {
-    fl.className = "flags clean";
-    fl.innerHTML = `<b>No obvious legal red flags in the listing text</b> — still worth a lawyer's check before any offer.`;
-  }
-
-  // renders — placeholders until OPENAI_API_KEY is set; then filled live on unlock
-  const slots = [["exterior","restored stone & garden"],["kitchen","warm Mediterranean"],["living","open-plan, light"]];
-  $("r-renders").innerHTML = slots.map(s =>
-    `<figure data-label="${s[1]}" data-prompt="${encodeURIComponent(promptFor(s[0], d))}">${slotPlaceholder(s[1])}</figure>`
+  $("r-gallery").innerHTML = d.photos.slice(0,5).map((u,i) =>
+    `<figure>${i===0?'<span class="tag">Before</span>':''}<img src="${u}" alt=""></figure>`
   ).join("");
 
-  // rough cost guide (indicative, from built area)
+  const slots = [["exterior","your property, restored"],["kitchen","kitchen concept"],["living","living concept"]];
+  $("r-renders").innerHTML = slots.map(s =>
+    `<figure data-kind="${s[0]}" data-label="${s[1]}" data-prompt="${encodeURIComponent(promptFor(s[0], d))}">${slotPlaceholder(s[1])}</figure>`
+  ).join("");
+
   const cost = $("r-cost");
   if(d.buildArea){
-    const lo = Math.round(d.buildArea*1200/1000)*1000;
-    const hi = Math.round(d.buildArea*2200/1000)*1000;
-    cost.style.display="flex";
+    const lo = Math.round(d.buildArea*1200/1000)*1000, hi = Math.round(d.buildArea*2200/1000)*1000;
+    cost.style.display = "flex";
     cost.innerHTML = `<div><div class="lab">Rough renovation guide</div><div class="band">€${lo.toLocaleString("en-GB")}–${hi.toLocaleString("en-GB")}</div></div>
-      <div class="note">For the existing ${d.buildArea} m² — before acquisition costs, extensions, pool or contingency. A guide, not a quote.</div>`;
-  } else { cost.style.display="none"; }
+      <div class="note">For the existing ${d.buildArea} m² — before acquisition, extensions, pool or contingency. A guide, not a quote.</div>`;
+  } else { cost.style.display = "none"; }
 
-  $("result").style.display="block";
+  $("result").style.display = "block";
   $("result").scrollIntoView({behavior:"smooth"});
 }
 
-function unlock(){
-  $("veil").style.display = "none";
-  renderSlots();
-}
-
-function slotPlaceholder(label){
-  return `<div class="slot"><div class="k">Concept</div><div class="l">${label}</div></div>`;
-}
+function slotPlaceholder(label){ return `<div class="slot"><div class="k">Concept</div><div class="l">${label}</div></div>`; }
 
 function promptFor(kind, d){
   const place = d.location ? (" in " + d.location) : " in rural Mallorca";
+  const note = d.details ? (" Listing notes: " + clip(d.details, 240)) : "";
   if(kind === "kitchen")
-    return "Photorealistic warm contemporary Mediterranean kitchen inside a compact restored Mallorcan stone finca: light oak cabinetry, limestone surfaces, retained stone wall, lime plaster, black-framed openings, modest scale, natural light.";
+    return "Photorealistic warm contemporary Mediterranean kitchen inside a compact restored stone finca: light oak cabinetry, limestone surfaces, retained stone wall, lime plaster, black-framed openings, modest scale, natural light." + note;
   if(kind === "living")
-    return "Photorealistic compact open-plan living area inside a restored Mallorcan stone finca: linen upholstery, natural rug, retained stone wall, lime plaster, oak joinery, strong connection to a terrace and garden, calm and understated.";
-  // exterior — keep the building honest: modest scale, no oversized villa
-  return "Photorealistic architectural concept. Restored modest single-storey Mallorcan stone finca" + place +
-    ", retaining the original stone character and roofline — not an oversized villa. Lime render, oak joinery, " +
-    "dark-framed glazing, olive trees, lavender, gravel arrival, warm Mediterranean light, restrained and tasteful.";
+    return "Photorealistic compact open-plan living area inside a restored stone finca: linen upholstery, natural rug, retained stone wall, lime plaster, oak joinery, strong connection to a terrace and garden, calm and understated." + note;
+  // exterior = transform of the user's own photo
+  return "Restore and renovate this rural Mediterranean stone house" + place +
+    ": repair the stonework, clear site clutter, add tasteful lime render where appropriate, dark-framed glazing, gravel arrival, dry-stone walls, olive trees and lavender, warm light. " +
+    "Keep the building's existing structure, scale, footprint and rooflines exactly — do not invent a larger or different building." + note;
 }
+
+function clip(s, n){ s = (s || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n) + "…" : s; }
+
+function detectFlags(text){
+  const lc = (text || "").toLowerCase();
+  return {
+    nonDevelopable: /no-?urbaniz|non[- ]?developable|undevelopable|protected land/i.test(lc),
+    noCedula: /no dispone de c[eé]dula|sin c[eé]dula|no c[eé]dula|without (a )?(habitation|occupation) licen|no habitation licen/i.test(lc),
+    unregistered: /no consta[\s\S]{0,40}inscrit|not registered|no inscrit|unregistered/i.test(lc),
+    pre1984: /anterior a 1984|pre-?1984|antes de 1984|before 1984/i.test(lc),
+  };
+}
+
+function applyFlags(text){
+  const f = detectFlags(text), notes = [];
+  if(f.nonDevelopable) notes.push("non-developable / protected land");
+  if(f.noCedula) notes.push("no cédula (habitation licence) mentioned");
+  if(f.unregistered) notes.push("building not registered");
+  if(f.pre1984) notes.push("seller claims pre-1984");
+  $("r-reminder").innerHTML = notes.length
+    ? `<b>Worth checking before you fall in love:</b> ${notes.join(" · ")} — these affect whether it can legally be lived in, extended or sold. Confirm with a local lawyer.`
+    : "A dream is not a survey. Always confirm a property’s legal and planning status with a local professional before you fall in love.";
+}
+
+/* ---------- render generation ---------- */
+function resizeToPng(dataUrl, max){
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      const scale = Math.min(1, max / Math.max(w, h));
+      w = Math.round(w*scale); h = Math.round(h*scale);
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      res(c.toDataURL("image/png"));
+    };
+    img.onerror = rej; img.src = dataUrl;
+  });
+}
+
+function unlock(){ $("veil").style.display = "none"; renderSlots(); }
 
 async function renderSlots(){
   if(!CONFIG.renderEndpoint) return;
-  const figs = document.querySelectorAll('#r-renders figure');
+  const figs = Array.from(document.querySelectorAll('#r-renders figure'));
   for(const fig of figs){
-    const prompt = decodeURIComponent(fig.getAttribute('data-prompt') || '');
-    const label = fig.getAttribute('data-label') || '';
-    if(!prompt) continue;
+    const kind = fig.dataset.kind;
+    const prompt = decodeURIComponent(fig.dataset.prompt || '');
+    const label = fig.dataset.label || '';
     fig.innerHTML = '<div class="slot"><div class="k">Generating…</div></div>';
     try{
-      const r = await fetch(CONFIG.renderEndpoint, {
-        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt })
-      });
+      const body = { prompt };
+      if(kind === "exterior" && CURRENT && CURRENT.hero){ body.image = await resizeToPng(CURRENT.hero, 1024); }
+      const r = await fetch(CONFIG.renderEndpoint, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
       const j = await r.json();
       if(j.ok && j.image){ fig.innerHTML = `<img src="${j.image}" alt="concept render">`; }
-      else { fig.innerHTML = slotPlaceholder(label); }   // no key / error → keep placeholder
+      else { fig.innerHTML = slotPlaceholder(label); }
     }catch(e){ fig.innerHTML = slotPlaceholder(label); }
   }
 }
 
-/* events */
-$("go").addEventListener("click", () => {
-  const u = $("url").value.trim();
-  if(!/^https?:\/\//i.test(u)){ setStatus(false,""); $("status").innerHTML='<span class="demo-badge">Paste a full https:// listing link</span>'; return; }
-  run(u);
-});
-$("url").addEventListener("keydown", (e)=>{ if(e.key==="Enter") $("go").click(); });
-
-$("unlock").addEventListener("click", () => {
-  if(CONFIG.stripeLink){ window.open(CONFIG.stripeLink, "_blank"); }
-  unlock(); // optimistic unlock for the demand test; enforce via Stripe webhook later
-});
-$("dev").addEventListener("click", unlock); // your own preview, no payment
+$("unlock").addEventListener("click", () => { if(CONFIG.stripeLink){ window.open(CONFIG.stripeLink, "_blank"); } unlock(); });
+$("dev").addEventListener("click", unlock);
 </script>
 </body>
 </html>
