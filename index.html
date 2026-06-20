@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>See the Dream · instant finca vision</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=EB+Garamond:ital@0;1&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  /* =========================================================
+     "See the Dream" — paste a listing, see what it could become.
+     CONFIG is at the bottom of the <script>. To go live:
+       1. Deploy this file + /functions/scrape.js to Cloudflare Pages.
+       2. Create a £2 Stripe Payment Link, paste it into CONFIG.stripeLink.
+       3. (Later) wire CONFIG.renderEndpoint to an image API for real renders.
+     Rename freely — "See the Dream" is a placeholder.
+     ========================================================= */
+  :root{
+    --paper:#FBF9F4; --paper-2:#F4EFE6; --card:#fff;
+    --ink:#2C2823; --ink-soft:#5E574C; --faint:#938A79;
+    --clay:#A9683F; --clay-deep:#8C5230; --olive:#7C7C50; --olive-deep:#5F6038;
+    --gold:#C6A664; --rule:#E6DECF; --red:#B14E39; --amber:#BC8636;
+    --shadow:0 1px 2px rgba(44,40,35,.04), 0 18px 40px -22px rgba(44,40,35,.22);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"EB Garamond",Georgia,serif;font-size:18px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:980px;margin:0 auto;padding:0 22px}
+  h1,h2,h3{font-family:"Playfair Display",Georgia,serif;font-weight:500;line-height:1.12;margin:0}
+  .eyebrow{font-family:"Jost",sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:.22em;font-size:11.5px;color:var(--clay)}
+  .meta{font-family:"Jost",sans-serif;letter-spacing:.04em}
+  .muted{color:var(--ink-soft)}
+  a{color:var(--clay-deep)}
+
+  /* hero / capture */
+  .hero{padding:74px 0 30px;text-align:center}
+  .hero h1{font-size:clamp(36px,7vw,64px);letter-spacing:-.01em}
+  .hero h1 em{font-style:italic;color:var(--clay-deep)}
+  .hero p.lede{font-size:clamp(18px,2.6vw,22px);color:var(--ink-soft);max-width:30ch;margin:18px auto 0}
+  .capture{margin:34px auto 0;max-width:620px;display:flex;gap:10px}
+  .capture input{flex:1;font-family:"Jost",sans-serif;font-size:15px;padding:15px 18px;border:1px solid var(--rule);border-radius:100px;background:#fff;color:var(--ink)}
+  .capture input:focus{outline:none;border-color:var(--clay)}
+  .btn{font-family:"Jost",sans-serif;font-weight:500;letter-spacing:.03em;font-size:15px;border:none;border-radius:100px;padding:15px 26px;background:var(--ink);color:#F4EFE6;cursor:pointer;white-space:nowrap;transition:transform .15s ease,background .15s ease}
+  .btn:hover{transform:translateY(-1px)}
+  .btn.gold{background:var(--clay-deep)}
+  .howto{margin:18px auto 0;font-family:"Jost",sans-serif;font-size:12.5px;letter-spacing:.04em;color:var(--faint)}
+  .howto b{color:var(--ink-soft);font-weight:500}
+
+  /* states */
+  #status{min-height:24px;text-align:center;margin-top:18px;font-family:"Jost",sans-serif;font-size:13px;letter-spacing:.04em;color:var(--ink-soft)}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--rule);border-top-color:var(--clay);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:8px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .demo-badge{display:inline-block;font-family:"Jost",sans-serif;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);border:1px solid #E6D2A8;background:#FAF3E3;border-radius:100px;padding:5px 12px}
+
+  /* result */
+  #result{display:none;padding:8px 0 70px}
+  .panel{background:var(--card);border:1px solid var(--rule);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-top:22px}
+  .pad{padding:26px 28px}
+  .prop-top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap}
+  .prop-top h2{font-size:clamp(24px,4vw,34px)}
+  .prop-top .loc{font-family:"Jost",sans-serif;font-size:13px;letter-spacing:.06em;color:var(--ink-soft);margin-top:6px}
+  .price{font-family:"Playfair Display",serif;font-size:30px;white-space:nowrap}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .chip{font-family:"Jost",sans-serif;font-size:12px;letter-spacing:.03em;color:var(--ink-soft);background:var(--paper-2);border-radius:100px;padding:7px 13px}
+  .chip b{color:var(--ink);font-weight:500}
+
+  .gallery{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-top:4px}
+  .gallery figure{margin:0;min-height:150px;background:var(--paper-2);position:relative;overflow:hidden}
+  .gallery figure:first-child{grid-row:span 2;min-height:308px}
+  .gallery img{width:100%;height:100%;object-fit:cover;display:block}
+  .gallery .tag{position:absolute;top:10px;left:10px;font-family:"Jost",sans-serif;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#fff;background:rgba(44,40,35,.7);padding:4px 9px;border-radius:4px}
+
+  .flags{margin-top:2px;padding:14px 28px;background:#FAEFE9;border-top:1px solid #EFD9CF;font-family:"Jost",sans-serif;font-size:12.5px;letter-spacing:.02em;color:var(--clay-deep)}
+  .flags b{font-weight:500}
+  .flags.clean{background:#F1F5EB;border-top-color:#D9E3CC;color:var(--olive-deep)}
+
+  /* locked vision */
+  .vision{position:relative}
+  .vision .veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:linear-gradient(180deg,rgba(251,249,244,.55),rgba(251,249,244,.92));backdrop-filter:blur(6px);z-index:5;padding:30px}
+  .vision .veil h3{font-size:clamp(22px,3.4vw,30px);max-width:18ch}
+  .vision .veil p{color:var(--ink-soft);max-width:34ch;margin:10px 0 20px}
+  .vision .veil .price-tag{font-family:"Jost",sans-serif;font-size:12px;letter-spacing:.08em;color:var(--faint);margin-top:14px}
+  .vision .veil .dev{display:block;margin-top:12px;font-family:"Jost",sans-serif;font-size:11.5px;color:var(--faint);cursor:pointer;text-decoration:underline}
+
+  .renders{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .renders figure{margin:0;min-height:180px;background:linear-gradient(135deg,#EFE9DC,#E5DCCA);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .renders figure img{width:100%;height:100%;object-fit:cover}
+  .renders .slot{font-family:"Jost",sans-serif;text-align:center;color:var(--ink-soft);padding:14px}
+  .renders .slot .k{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--clay)}
+  .renders .slot .l{font-style:italic;font-size:14px;margin-top:6px}
+
+  .cost{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;margin-top:22px;padding:20px 24px;background:var(--ink);color:#F2ECE0;border-radius:12px}
+  .cost .lab{font-family:"Jost",sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+  .cost .band{font-family:"Playfair Display",serif;font-size:clamp(22px,3vw,28px);margin-top:4px}
+  .cost .note{font-family:"EB Garamond",serif;font-style:italic;font-size:13.5px;color:#C9C0AE;max-width:30ch}
+
+  footer{padding:36px 0 60px;text-align:center;color:var(--faint);font-size:12.5px;font-family:"Jost",sans-serif;letter-spacing:.02em;line-height:1.6}
+  .disc{max-width:70ch;margin:0 auto}
+
+  @media(max-width:760px){
+    .capture{flex-direction:column}
+    .gallery{grid-template-columns:1fr 1fr}.gallery figure:first-child{grid-column:span 2;grid-row:auto;min-height:200px}
+    .renders{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<section class="hero wrap">
+  <div class="eyebrow">Spanish renovation properties</div>
+  <h1>See the <em>dream</em>.</h1>
+  <p class="lede">Paste a property listing. See what it could become — in about a minute, for £2.</p>
+  <div class="capture">
+    <input id="url" type="url" placeholder="Paste a terrenos.es listing link…" autocomplete="off">
+    <button class="btn" id="go">See the dream →</button>
+  </div>
+  <div class="howto">Works today on <b>terrenos.es</b> links · before-photos &amp; facts pulled live from the listing</div>
+  <div id="status"></div>
+</section>
+
+<section class="wrap" id="result">
+  <!-- property panel -->
+  <div class="panel">
+    <div class="pad">
+      <div class="prop-top">
+        <div>
+          <h2 id="r-title"></h2>
+          <div class="loc" id="r-loc"></div>
+        </div>
+        <div class="price" id="r-price"></div>
+      </div>
+      <div class="chips" id="r-chips"></div>
+    </div>
+    <div class="gallery" id="r-gallery"></div>
+    <div class="flags" id="r-flags"></div>
+  </div>
+
+  <!-- vision panel (locked until £2) -->
+  <div class="panel vision" id="vision">
+    <div class="veil" id="veil">
+      <div class="eyebrow">The vision</div>
+      <h3>See it restored — exterior, kitchen, living &amp; garden</h3>
+      <p>Concept renders, a quick renovation cost guide and the full brochure to keep.</p>
+      <button class="btn gold" id="unlock">Unlock the full vision · £2</button>
+      <span class="price-tag">one property · instant · yours to download</span>
+      <span class="dev" id="dev">preview without paying (you)</span>
+    </div>
+    <div class="pad">
+      <div class="renders" id="r-renders"></div>
+      <div class="cost" id="r-cost"></div>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <div class="disc" id="disc">Concept visuals and rough figures only — not a valuation, survey, planning opinion or legal advice. Always verify a property's legal and planning status with a qualified local professional before committing.</div>
+</footer>
+
+<script>
+/* ====================== CONFIG ====================== */
+const CONFIG = {
+  scrapeEndpoint: "/scrape",          // the Cloudflare Pages Function
+  stripeLink: "",                     // <-- paste your £2 Stripe Payment Link here
+  renderEndpoint: "",                 // <-- later: an image-API function for real renders
+  currencyHint: "€",
+};
+/* =================================================== */
+
+const $ = (id) => document.getElementById(id);
+let CURRENT = null;
+
+// Sample data so the page renders in preview before the backend is deployed.
+const DEMO = {
+  ok:true, demo:true, ref:"TR412081", title:"Detached house · Algaida", location:"Algaida, Mallorca",
+  price:149900, plotArea:5000, buildArea:60, bathrooms:1, type:"Detached house",
+  landType:"Non-developable", access:"Paved road", utilities:["Water","Electricity","Sewerage","Solar","Well"],
+  hero:"https://cdn.terrenos.es/photo/0144/01/9c7fc7184f245d3bc5fec67381a506efba3767bb.jpg",
+  photos:[
+    "https://cdn.terrenos.es/photo/0144/01/thumb_14300390_photo_standart.jpg",
+    "https://cdn.terrenos.es/photo/0144/01/thumb_14300391_photo_standart.jpg"
+  ],
+  flags:{nonDevelopable:true,noCedula:true,unregistered:true,pre1984:true}
+};
+
+function eur(n){ return n ? "€" + n.toLocaleString("en-GB") : "—"; }
+
+async function run(url){
+  setStatus(true, "Reading the listing…");
+  let data;
+  try{
+    const r = await fetch(CONFIG.scrapeEndpoint + "?url=" + encodeURIComponent(url));
+    data = await r.json();
+    if(!data.ok) throw new Error(data.error || "parse failed");
+  }catch(e){
+    // backend not reachable (e.g. previewing before deploy) -> fall back to sample
+    data = Object.assign({}, DEMO, { sourceUrl:url });
+  }
+  CURRENT = data;
+  render(data);
+  setStatus(false, data.demo ? "demo" : "");
+}
+
+function setStatus(loading, msg){
+  const s = $("status");
+  if(loading){ s.innerHTML = '<span class="spinner"></span>' + msg; return; }
+  s.innerHTML = msg === "demo"
+    ? '<span class="demo-badge">Preview — sample data (deploy the scrape function for live listings)</span>'
+    : "";
+}
+
+function render(d){
+  $("r-title").textContent = d.title || "Property";
+  $("r-loc").textContent = [d.location, d.ref].filter(Boolean).join("  ·  ");
+  $("r-price").textContent = eur(d.price);
+
+  // chips
+  const chips = [];
+  if(d.buildArea) chips.push(["Built", d.buildArea + " m²"]);
+  if(d.plotArea) chips.push(["Plot", d.plotArea.toLocaleString("en-GB") + " m²"]);
+  if(d.type) chips.push(["Type", d.type]);
+  if(d.bathrooms) chips.push(["Baths", d.bathrooms]);
+  if(d.access) chips.push(["Access", d.access]);
+  if(d.utilities && d.utilities.length) chips.push(["Services", d.utilities.join(" · ")]);
+  $("r-chips").innerHTML = chips.map(c => `<span class="chip"><b>${c[0]}</b> ${c[1]}</span>`).join("");
+
+  // gallery
+  const imgs = [d.hero, ...(d.photos||[])].filter(Boolean).slice(0,5);
+  $("r-gallery").innerHTML = imgs.map((u,i) =>
+    `<figure>${i===0?'<span class="tag">Before</span>':''}<img src="${u}" alt="" loading="lazy" onerror="this.parentNode.style.display='none'"></figure>`
+  ).join("") || "";
+
+  // honest auto-flags
+  const f = d.flags || {};
+  const notes = [];
+  if(f.nonDevelopable) notes.push("non-developable land");
+  if(f.noCedula) notes.push("no cédula (habitation licence) mentioned");
+  if(f.unregistered) notes.push("building not registered");
+  if(f.pre1984) notes.push("seller claims pre-1984");
+  const fl = $("r-flags");
+  if(notes.length){
+    fl.className = "flags";
+    fl.innerHTML = `<b>Worth checking before you fall in love:</b> ${notes.join(" · ")}. These affect whether it can legally be lived in, extended or sold — confirm with a local lawyer.`;
+  } else {
+    fl.className = "flags clean";
+    fl.innerHTML = `<b>No obvious legal red flags in the listing text</b> — still worth a lawyer's check before any offer.`;
+  }
+
+  // renders (placeholders until an image API is wired)
+  const slots = [["Exterior","restored stone & garden"],["Kitchen","warm Mediterranean"],["Living","open-plan, light"]];
+  $("r-renders").innerHTML = slots.map(s =>
+    `<figure><div class="slot"><div class="k">Concept</div><div class="l">${s[1]}</div></div></figure>`
+  ).join("");
+
+  // rough cost guide (indicative, from built area)
+  const cost = $("r-cost");
+  if(d.buildArea){
+    const lo = Math.round(d.buildArea*1200/1000)*1000;
+    const hi = Math.round(d.buildArea*2200/1000)*1000;
+    cost.style.display="flex";
+    cost.innerHTML = `<div><div class="lab">Rough renovation guide</div><div class="band">€${lo.toLocaleString("en-GB")}–${hi.toLocaleString("en-GB")}</div></div>
+      <div class="note">For the existing ${d.buildArea} m² — before acquisition costs, extensions, pool or contingency. A guide, not a quote.</div>`;
+  } else { cost.style.display="none"; }
+
+  $("result").style.display="block";
+  $("result").scrollIntoView({behavior:"smooth"});
+}
+
+function unlock(){
+  $("veil").style.display = "none";
+  // a real render call would go here when CONFIG.renderEndpoint is set
+}
+
+/* events */
+$("go").addEventListener("click", () => {
+  const u = $("url").value.trim();
+  if(!/^https?:\/\//i.test(u)){ setStatus(false,""); $("status").innerHTML='<span class="demo-badge">Paste a full https:// listing link</span>'; return; }
+  run(u);
+});
+$("url").addEventListener("keydown", (e)=>{ if(e.key==="Enter") $("go").click(); });
+
+$("unlock").addEventListener("click", () => {
+  if(CONFIG.stripeLink){ window.open(CONFIG.stripeLink, "_blank"); }
+  unlock(); // optimistic unlock for the demand test; enforce via Stripe webhook later
+});
+$("dev").addEventListener("click", unlock); // your own preview, no payment
+</script>
+</body>
+</html>
