@@ -27,20 +27,53 @@ export async function onRequest(context) {
 
   let html;
   try {
-    const res = await fetch(target, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
-        "Accept-Language": "en,es;q=0.8",
-      },
-    });
-    if (!res.ok) throw new Error("upstream " + res.status);
-    html = await res.text();
+    html = await getHtml(target, context.env || {});
   } catch (e) {
     return json({ ok: false, error: "Could not fetch listing: " + e.message }, 502, cors);
   }
 
   return json(parse(html, target), 200, cors);
+}
+
+/* Fetch the listing HTML. Tries a direct, browser-like request first;
+   if the site blocks it (403/429) AND a SCRAPER_KEY is set in Cloudflare,
+   retries through a residential-proxy scraping API.
+
+   To enable the proxy: sign up for a scraping API with a free tier
+   (e.g. ScrapingBee, Scrapfly, Scrape.do), then add an environment
+   variable SCRAPER_KEY (Secret) with your key. The call below uses
+   ScrapingBee's format — swap the URL if you pick a different provider.
+   If terrenos still blocks the residential proxy, escalate by changing
+   premium_proxy=true to stealth_proxy=true&render_js=true (costs more). */
+async function getHtml(url, env) {
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-GB,en;q=0.9,es;q=0.8",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+  };
+
+  // 1) direct
+  let res = await fetch(url, { headers });
+  if (res.ok) return await res.text();
+  const firstStatus = res.status;
+
+  // 2) via residential proxy (only if you've set SCRAPER_KEY)
+  if (env.SCRAPER_KEY) {
+    const api =
+      "https://app.scrapingbee.com/api/v1/?api_key=" + env.SCRAPER_KEY +
+      "&url=" + encodeURIComponent(url) +
+      "&premium_proxy=true&country_code=es&render_js=false";
+    res = await fetch(api);
+    if (res.ok) return await res.text();
+    throw new Error("blocked " + firstStatus + ", proxy also " + res.status);
+  }
+
+  throw new Error("blocked " + firstStatus + " — set SCRAPER_KEY in Cloudflare to retry via a residential proxy");
 }
 
 /* ---------- helpers ---------- */
